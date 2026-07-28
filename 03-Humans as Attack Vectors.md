@@ -327,4 +327,10 @@ Attack Prevented    Account/System Compromised
                     ▼
          Investigation and Response
 ```
+# Recommended Cyber Security News Sources
 
+Keeping up with current threats is an important habit for every SOC Analyst.
+
+* Krebs on Security - https://krebsonsecurity.com
+* The Hacker News -  https://thehackernews.com
+* BleepingComputer - https://www.bleepingcomputer.com
