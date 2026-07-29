@@ -327,3 +327,20 @@ Example:
 * Internal security standards
 
 ---
+## Stay Updated (SOC Analyst)
+
+A SOC Analyst doesn't usually manage systems, but should understand common attacks, vulnerabilities, and defenses. Staying updated helps you detect threats faster and work better with IT and security teams.
+
+### Useful Resources
+
+- **The DFIR Report** – Real-world attack investigations and incident analysis  
+  🔗 https://thedfirreport.com/
+
+- **CISA – Known Exploited Vulnerabilities (KEV)** – List of vulnerabilities actively exploited by attackers  
+  🔗 https://www.cisa.gov/known-exploited-vulnerabilities-catalog
+
+- **BleepingComputer** – Latest cybersecurity news, ransomware, and supply chain attacks  
+  🔗 https://www.bleepingcomputer.com/
+
+- **Check Point Live Cyber Threat Map** – Live global cyber attack map  
+  🔗 https://threatmap.checkpoint.com/
