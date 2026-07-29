@@ -246,15 +246,11 @@ Thousands of Customers Install Update
 Mass Compromise
 ```
 
----
-
 # Why Supply Chain Attacks Are Dangerous
 
 * Trusted software becomes malicious.
 * Many organisations are affected simultaneously.
 * Victims may not realise the software has been compromised.
-
----
 
 # Misconfiguration
 
@@ -264,7 +260,6 @@ A **misconfiguration** is an insecure system setup caused by incorrect configura
 
 The software works correctly—the problem is how it has been configured.
 
----
 
 # Common Examples
 
@@ -277,31 +272,25 @@ password
 1111
 ```
 
----
-
 ### Internet-Exposed Database
 
 A sensitive database is accidentally made accessible from the internet.
 
----
 
 ### Open Cloud Storage
 
 Cloud storage buckets are left publicly accessible.
 
----
 
 ### Excessive Permissions
 
 Users or services receive more privileges than necessary.
 
----
 
 ### Default Settings
 
 Default usernames and passwords remain unchanged after installation.
 
----
 
 # Vulnerability vs Misconfiguration
 
@@ -311,7 +300,6 @@ Default usernames and passwords remain unchanged after installation.
 | Requires a vendor fix (patch)       | Requires configuration changes                 |
 | Created during software development | Introduced during deployment or administration |
 
----
 
 # Responding to Misconfigurations
 
@@ -319,7 +307,6 @@ Default usernames and passwords remain unchanged after installation.
 
 Ethical hackers simulate attacks to identify security weaknesses before malicious actors do.
 
----
 
 ## 2. Vulnerability Scanning
 
@@ -329,8 +316,6 @@ Automated tools detect issues such as:
 * Weak passwords
 * Outdated software
 * Known vulnerabilities
-
----
 
 ## 3. Configuration Audits
 
@@ -342,106 +327,3 @@ Example:
 * Internal security standards
 
 ---
-
-# SOC Analyst's Role
-
-SOC analysts may not configure systems directly, but they:
-
-* Detect exploitation attempts
-* Investigate suspicious behaviour
-* Report vulnerabilities and misconfigurations
-* Coordinate with IT teams
-* Recommend remediation
-* Monitor for signs of compromise after new vulnerabilities are disclosed
-
----
-
-# Real-World Attack Flow
-
-```text
-Attacker
-    │
-    ▼
-Gain Initial Access
-    │
-    ├───────────────┬───────────────┐
-    ▼               ▼               ▼
-Weak Password   Vulnerability   Supply Chain
-    │               │               │
-    └───────────────┴───────────────┘
-                    │
-                    ▼
-          System Compromised
-                    │
-                    ▼
-           SOC Detects Activity
-                    │
-                    ▼
-      Investigation and Containment
-                    │
-                    ▼
-      Patch, Reconfigure, Recover
-```
-
----
-
-# Key Terms
-
-| Term                | Meaning                                                                                |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| System              | A device, server, application, or cloud service that stores or processes data          |
-| Vulnerability       | A software weakness that can be exploited                                              |
-| Zero-Day            | A vulnerability exploited before a patch is available                                  |
-| CVE                 | Common Vulnerabilities and Exposures identifier for publicly disclosed vulnerabilities |
-| Patch               | A software update that fixes vulnerabilities                                           |
-| Misconfiguration    | An insecure system setup or configuration                                              |
-| Supply Chain Attack | Compromising trusted software or suppliers to attack many organisations                |
-| IPS                 | Intrusion Prevention System                                                            |
-| WAF                 | Web Application Firewall                                                               |
-| Rubber Ducky        | A USB device that emulates a keyboard to execute malicious commands                    |
-
----
-
-# Quick Revision
-
-* A **system** is any device, server, or cloud platform that stores or processes information.
-* Attackers target systems because compromising one critical system can provide broad access or valuable data.
-* Common attack methods include **human-led attacks, software vulnerabilities, and supply chain attacks**.
-* **Zero-day vulnerabilities** have no vendor patch available when they are first exploited.
-* **CVEs** provide standard identifiers for publicly disclosed vulnerabilities.
-* A **patch** fixes software vulnerabilities, while **misconfigurations** are corrected by changing insecure settings.
-* Supply chain attacks exploit trusted software or service providers to compromise many organisations simultaneously.
-* SOC analysts detect attacks, investigate compromises, and coordinate with IT teams to remediate vulnerabilities and misconfigurations.
-
----
-
-# Interview Questions
-
-### What is a software vulnerability?
-
-A software vulnerability is a flaw or weakness in software that attackers can exploit to gain unauthorised access, execute code, or disrupt systems.
-
----
-
-### What is the difference between a vulnerability and a misconfiguration?
-
-* A **vulnerability** is a flaw in the software itself and is typically resolved by applying a vendor patch.
-* A **misconfiguration** is an insecure setup introduced during deployment or administration and is corrected by changing the system's configuration.
-
----
-
-### What is a CVE?
-
-A **Common Vulnerabilities and Exposures (CVE)** identifier is a unique reference assigned to a publicly disclosed security vulnerability, allowing consistent tracking and discussion across the security community.
-
----
-
-### What is a zero-day vulnerability?
-
-A **zero-day vulnerability** is a software flaw that attackers exploit before the vendor has released an official patch or fix.
-
----
-
-### What is a supply chain attack?
-
-A supply chain attack occurs when attackers compromise trusted software, libraries, or service providers so that malicious code or updates are distributed to many downstream users or organisations.
