@@ -266,3 +266,441 @@ The activity **may be legitimate**, but you should still verify:
 
 ------------------
 
+# Network Diagrams 
+
+# Scenario
+
+Suppose you receive these firewall alerts:
+
+```
+08:00  103.61.240.174 → Connected to Firewall on TCP/10443
+
+08:23  103.61.240.174 → Translated to Internal IP 10.10.0.53
+
+08:25  10.10.0.53 → Scanning 172.16.15.0/24
+
+08:32  10.10.0.53 → Scanning 172.16.23.0/24
+```
+
+At first glance, these are just IP addresses. As a SOC analyst, you need to answer questions like:
+
+* What service is running on **Port 10443**?
+* What is **10.10.0.53**?
+* Which subnet does it belong to?
+* Why is it scanning other networks?
+
+To answer these questions, we use a **Network Diagram**.
+
+---
+
+# What is a Network Diagram?
+
+A **Network Diagram** is a visual map of an organization's network.
+
+It shows:
+
+* Internet connection
+* Firewalls
+* VPN
+* Servers
+* Office network
+* Database network
+* Subnets
+* Network connections
+
+It helps SOC analysts understand **how devices and networks are connected**.
+
+---
+
+# Example Network Diagram
+
+```
+                   Internet
+                       │
+                       ▼
+                Corporate Firewall
+                 │      │
+        TCP 10443│      │HTTP/HTTPS
+                 ▼      ▼
+               VPN     Web Server
+                 │
+        -------------------------
+        │           │
+        ▼           ▼
+ Database Subnet   Office Subnet
+172.16.15.0/24   172.16.23.0/24
+```
+
+---
+
+# Understanding the Attack
+
+## Alert 1
+
+```
+08:00
+
+103.61.240.174
+
+↓
+
+Connected to TCP Port 10443
+```
+
+### Question
+
+What is Port **10443**?
+
+### Answer
+
+The Network Diagram shows that **Port 10443 is the VPN service**.
+
+So the attacker is trying to access the company's VPN.
+
+---
+
+## Alert 2
+
+```
+08:23
+
+103.61.240.174
+
+↓
+
+10.10.0.53
+```
+
+### What happened?
+
+The external IP successfully authenticated to the VPN.
+
+The VPN assigned the attacker an internal IP:
+
+```
+10.10.0.53
+```
+
+This IP belongs to the **VPN Subnet (10.10.0.0/16)**.
+
+---
+
+## Alert 3
+
+```
+08:25
+
+10.10.0.53
+
+↓
+
+172.16.15.0/24
+```
+
+### What happened?
+
+The attacker started scanning the **Database Subnet**.
+
+Purpose:
+
+* Find servers
+* Find open ports
+* Find vulnerable systems
+
+The firewall likely blocked the scan because no open ports were found.
+
+---
+
+## Alert 4
+
+```
+08:32
+
+10.10.0.53
+
+↓
+
+172.16.23.0/24
+```
+
+### What happened?
+
+The attacker changed targets.
+
+Now they are scanning the **Office Subnet** hoping to find accessible systems.
+
+---
+
+# Reconstructing the Attack
+
+Using the Network Diagram, we can understand the complete attack.
+
+### Step 1
+
+Attacker connects from the Internet.
+
+```
+Internet
+
+↓
+
+103.61.240.174
+```
+
+---
+
+### Step 2
+
+Attempts VPN login.
+
+```
+Port 10443
+
+↓
+
+VPN Server
+```
+
+---
+
+### Step 3
+
+VPN login succeeds.
+
+The attacker receives an internal IP.
+
+```
+10.10.0.53
+```
+
+---
+
+### Step 4
+
+Scans the Database Network.
+
+```
+172.16.15.0/24
+```
+
+No success.
+
+---
+
+### Step 5
+
+Moves to another subnet.
+
+```
+172.16.23.0/24
+
+(Office Network)
+```
+
+The attack is still ongoing.
+
+---
+
+# Complete Attack Flow
+
+```
+Internet Attacker
+103.61.240.174
+        │
+        ▼
+Corporate Firewall
+        │
+        ▼
+VPN Login (TCP 10443)
+        │
+        ▼
+Assigned VPN IP
+10.10.0.53
+        │
+        ▼
+Scans Database Network
+172.16.15.0/24
+        │
+        ▼
+Blocked
+        │
+        ▼
+Scans Office Network
+172.16.23.0/24
+```
+
+----------------------------
+
+# SOC Workbooks (Playbooks / Runbooks)
+
+# What is a SOC Workbook?
+
+A **SOC Workbook** is a **step-by-step guide** that helps analysts investigate and respond to a specific type of security alert.
+
+It ensures every analyst follows the same investigation process.
+
+> **Other Names:**
+>
+> * Playbook
+> * Runbook
+> * Workflow
+
+# Why Do SOC Teams Use Workbooks?
+
+Without a workbook:
+
+* Analysts may forget important investigation steps.
+* Different analysts may investigate the same alert differently.
+* Important evidence may be missed.
+
+With a workbook:
+
+* Every alert is investigated consistently.
+* Mistakes are reduced.
+* New (L1) analysts can investigate alerts more confidently.
+* Investigations become faster and more accurate.
+
+# Example
+
+### Alert
+
+```text
+Alert Name:
+Unusual Login Location
+
+User:
+john.smith
+
+Login Location:
+Russia
+
+Normal Location:
+United Kingdom
+```
+
+Instead of guessing whether the login is malicious, the analyst follows the **Workbook**.
+
+# Main Phases of a Workbook
+
+Every workbook is generally divided into **three phases**.
+
+## 1. Enrichment
+
+### Purpose
+
+Collect additional information before making a decision.
+
+### Check:
+
+* User details (Identity Inventory)
+* Host details (Asset Inventory)
+* Threat Intelligence
+* IP reputation
+* Login location
+* User role
+* Working hours
+
+### Example
+
+User:
+
+```text
+John Smith
+```
+
+Identity Inventory shows:
+
+* Finance Department
+* Works in London
+* Office hours: 9 AM – 6 PM
+
+Threat Intelligence shows:
+
+* Login IP is associated with a VPN service.
+
+Now you have more context.
+
+## 2. Investigation
+
+### Purpose
+
+Analyze the alert using all available evidence.
+
+### Check:
+
+* SIEM logs
+* Previous logins
+* Failed login attempts
+* Related alerts
+* User activity
+* Network activity
+* Process execution
+
+### Example
+
+You discover:
+
+* User logged in from London at 9:00 AM.
+* Five minutes later, another login appears from Russia.
+
+Since it is impossible to log in from two countries within five minutes, the activity is suspicious.
+
+## 3. Escalation
+
+### Purpose
+
+Decide the next action.
+
+Possible actions:
+
+* Close as False Positive.
+* Escalate to L2.
+* Contact the user.
+* Start Incident Response.
+
+### Example
+
+The login is confirmed to be malicious.
+
+Action:
+
+* Escalate to L2.
+* Contact the user.
+* Reset credentials.
+* Investigate further.
+
+# Workbook Flow
+
+```text
+Alert Received
+       │
+       ▼
+Enrichment
+(User, Asset, Threat Intel)
+       │
+       ▼
+Investigation
+(SIEM Logs, Related Events)
+       │
+       ▼
+Decision
+       │
+ ┌─────┴─────┐
+ │           │
+Safe      Suspicious
+ │           │
+Close     Escalate to L2
+```
+
+# Benefits of a Workbook
+
+* Standardizes investigations.
+* Ensures no important steps are missed.
+* Helps junior analysts.
+* Reduces investigation time.
+* Improves investigation quality.
+* Makes SOC operations consistent.
+
+-----------------
+
+
