@@ -1043,4 +1043,709 @@ With SIEM:
 * Investigations become faster and easier.
 
 --------------------
-EDR Telemetry
+
+# Telemetry in EDR 
+
+
+# What is Telemetry?
+
+**Telemetry** is the detailed data collected by an **EDR Agent (software installed on an endpoint)** about everything happening on an endpoint.
+
+Think of Telemetry as the **Black Box (like an airplane's flight recorder)** of a computer.
+
+Just as an airplane's black box records everything before an accident, EDR telemetry records everything happening on an endpoint before, during, and after a cyber attack.
+
+---
+
+# Why is Telemetry Important?
+
+EDR uses telemetry to:
+
+* Detect suspicious activities.
+* Investigate security incidents.
+* Reconstruct the attack timeline.
+* Find the root cause (main reason) of an attack.
+
+The more telemetry collected, the easier it is to distinguish **normal activity** from **malicious activity**.
+
+---
+
+# Types of Telemetry Collected by EDR
+
+## 1. Process Execution and Termination
+
+### What is it?
+
+EDR records every process (running program) that starts and stops.
+
+### It monitors:
+
+* Process creation
+* Process termination
+* Parent process
+* Child process
+
+### Why is it important?
+
+Helps detect:
+
+* Malware execution
+* Suspicious parent-child process relationships
+* Malicious executables
+
+### Example
+
+```text
+explorer.exe
+      │
+      ▼
+winword.exe
+      │
+      ▼
+powershell.exe
+```
+
+Normally, **Word should not launch PowerShell**. This unusual process chain can indicate malware.
+
+---
+
+## 2. Network Connections
+
+### What is it?
+
+EDR records every network connection made by the endpoint.
+
+### It monitors:
+
+* Source IP
+* Destination IP
+* Port Number
+* Domain Name
+* Protocol
+
+### Why is it important?
+
+Helps detect:
+
+* **C2 (Command and Control - attacker's remote server)** communication.
+* Data Exfiltration (stealing data from the organization).
+* Lateral Movement (attacker moving to other systems inside the network).
+* Unusual network traffic.
+
+### Example
+
+```text
+powershell.exe
+
+↓
+
+45.76.120.10:443
+```
+
+PowerShell connecting to an unknown external IP is suspicious.
+
+---
+
+## 3. Command Line Activity
+
+### What is it?
+
+EDR records commands executed in:
+
+* CMD (Command Prompt)
+* PowerShell
+* Terminal
+
+### Why is it important?
+
+Helps detect:
+
+* Malicious commands
+* Encoded PowerShell
+* Obfuscated Scripts (scripts intentionally made difficult to read)
+* Privilege escalation attempts
+
+### Example
+
+```text
+powershell.exe -EncodedCommand ...
+```
+
+Encoded PowerShell commands are commonly used by attackers.
+
+---
+
+## 4. File and Folder Modifications
+
+### What is it?
+
+EDR records all file and folder changes.
+
+### It monitors:
+
+* File creation
+* File deletion
+* File modification
+* File renaming
+* Folder creation
+
+### Why is it important?
+
+Helps detect:
+
+* Malware dropping files
+* Ransomware encrypting files
+* Data staging (collecting data before stealing it)
+
+### Example
+
+```text
+EmployeeData.xlsx
+
+↓
+
+EmployeeData.xlsx.locked
+```
+
+This could indicate ransomware encryption.
+
+---
+
+## 5. Registry Modifications
+
+### What is the Registry?
+
+The **Windows Registry (database that stores Windows settings and configurations)**.
+
+Many malware families modify the registry.
+
+### EDR monitors:
+
+* Registry key creation
+* Registry key modification
+* Registry key deletion
+
+### Why is it important?
+
+Helps detect:
+
+* Malware persistence (malware making itself start automatically after reboot).
+* Security setting changes.
+* Suspicious configuration changes.
+
+### Example
+
+Malware creates a registry key so it runs every time Windows starts.
+
+EDR records the registry change.
+
+---
+
+# How EDR Uses Telemetry
+
+EDR does not look at one event alone.
+
+Instead, it combines multiple telemetry events.
+
+Example:
+
+```text
+Word Document Opened
+        │
+        ▼
+Macro Executed
+        │
+        ▼
+PowerShell Started
+        │
+        ▼
+Downloaded Malware
+        │
+        ▼
+Registry Modified
+        │
+        ▼
+Connected to C2 Server
+```
+
+One event alone may look normal.
+
+When all events are connected together, they clearly indicate an attack.
+
+---
+
+# Why is Telemetry Useful for Analysts?
+
+Telemetry helps analysts:
+
+* See the complete attack chain.
+* Understand what happened.
+* Identify the root cause (main reason) of the incident.
+* Build an attack timeline (sequence of events during the attack).
+* Make accurate True Positive or False Positive decisions.
+
+------------------------
+
+# EDR Detection & Response 
+
+
+# EDR Detection
+
+After collecting **Telemetry (endpoint activity data)**, the EDR analyzes it using advanced detection techniques.
+
+These techniques help detect attacks that traditional antivirus may miss.
+
+---
+
+# 1. Behavioral Detection
+
+## What is Behavioral Detection?
+
+Instead of only checking for **known malware signatures (digital fingerprints)**, EDR monitors the **behavior** of programs.
+
+If a program behaves suspiciously, EDR generates an alert.
+
+---
+
+### Example
+
+Normally,
+
+```text
+explorer.exe
+      │
+      ▼
+winword.exe
+```
+
+But if:
+
+```text
+winword.exe
+      │
+      ▼
+powershell.exe
+```
+
+This is suspicious because **Microsoft Word normally should not start PowerShell**.
+
+EDR flags this unusual **Parent-Child Process Relationship (which process started another process).**
+
+---
+
+### Why is it Important?
+
+It detects:
+
+* Fileless malware
+* Macro attacks
+* Living-off-the-Land (LotL) attacks (attacks using legitimate system tools like PowerShell or CMD)
+* Unknown malware
+
+---
+
+# 2. Anomaly Detection
+
+## What is Anomaly Detection?
+
+**Anomaly Detection** identifies activities that are different from the endpoint's normal behavior.
+
+EDR first learns what is **normal**.
+
+Then it detects anything unusual.
+
+---
+
+### Example
+
+A computer has never modified the Windows startup registry.
+
+Suddenly:
+
+```text
+powershell.exe
+
+↓
+
+Modifies Auto-Start Registry Key
+```
+
+This unusual activity is flagged.
+
+---
+
+### Why is it Important?
+
+Detects:
+
+* Insider threats
+* New malware
+* Suspicious administrator activity
+* Unusual user behavior
+
+> **Note:** Sometimes anomaly detection may generate **False Positives (normal activity incorrectly identified as malicious).**
+
+---
+
+# 3. IOC Matching
+
+## What is IOC Matching?
+
+**IOC (Indicator of Compromise - evidence that a system may be compromised)**
+
+EDR compares collected telemetry with **Threat Intelligence (database of known malicious IPs, domains, file hashes, etc.)**.
+
+If a match is found,
+
+EDR immediately generates an alert.
+
+---
+
+### Common IOCs
+
+* Malicious IP Address
+* Malicious Domain
+* File Hash
+* Registry Key
+* File Name
+
+---
+
+### Example
+
+User downloads:
+
+```text
+invoice.exe
+```
+
+The file's **Hash (unique digital fingerprint of a file)** matches a known ransomware sample.
+
+EDR immediately flags the file.
+
+---
+
+# 4. MITRE ATT&CK Mapping
+
+## What is MITRE ATT&CK?
+
+**MITRE ATT&CK** is a framework that maps attacker behaviors into:
+
+* **Tactics (attacker's goal)**
+* **Techniques (how the attacker achieves that goal)**
+
+EDR automatically maps detections to MITRE.
+
+---
+
+### Example
+
+Malware creates a Scheduled Task.
+
+EDR maps it as:
+
+```text
+Tactic:
+
+Persistence
+
+Technique:
+
+Scheduled Task/Job
+```
+
+---
+
+### Why is it Useful?
+
+It helps analysts understand:
+
+* What stage of the attack they are seeing.
+* What the attacker is trying to achieve.
+* What might happen next.
+
+---
+
+# 5. Machine Learning (ML)
+
+## What is Machine Learning?
+
+**Machine Learning (AI that learns patterns from data)**
+
+EDR trains on millions of:
+
+* Normal activities
+* Malicious activities
+
+Then predicts whether new behavior is malicious.
+
+---
+
+### Example
+
+Individually,
+
+These activities look normal:
+
+* Word opens.
+* PowerShell starts.
+* Network connection occurs.
+
+Together,
+
+Machine Learning recognizes the complete attack chain.
+
+↓
+
+Alert generated.
+
+---
+
+### Why is ML Important?
+
+Helps detect:
+
+* Zero-Day attacks (previously unknown vulnerabilities)
+* Fileless malware
+* Multi-stage attacks
+* Advanced Persistent Threats (APTs)
+
+---
+
+# Detection Summary
+
+| Detection Technique      | Detects                        |
+| ------------------------ | ------------------------------ |
+| **Behavioral Detection** | Suspicious behavior            |
+| **Anomaly Detection**    | Unusual activities             |
+| **IOC Matching**         | Known Indicators of Compromise |
+| **MITRE Mapping**        | Attack stage and technique     |
+| **Machine Learning**     | Complex attack patterns        |
+
+---
+
+# EDR Response
+
+After detecting a threat, EDR allows analysts to respond immediately.
+
+Response can be:
+
+* Automatic
+* Manual
+
+---
+
+# 1. Isolate Host
+
+## What is Host Isolation?
+
+Disconnect the infected endpoint from the network.
+
+The computer still works,
+
+but cannot communicate with other systems.
+
+---
+
+### Why?
+
+Stops:
+
+* Malware spreading
+* Lateral Movement (attacker moving to other systems)
+* Data theft
+
+---
+
+### Example
+
+Laptop infected with ransomware.
+
+↓
+
+Click:
+
+```text
+Isolate Host
+```
+
+The laptop is removed from the network.
+
+---
+
+# 2. Terminate Process
+
+## What is Process Termination?
+
+Stop a running malicious process.
+
+---
+
+### Example
+
+```text
+malware.exe
+```
+
+↓
+
+Terminate
+
+The malware immediately stops running.
+
+---
+
+### Why?
+
+Useful when:
+
+* Only one process is malicious.
+* Host isolation is unnecessary.
+
+> **Be Careful:** Terminating a legitimate process may interrupt normal system operations.
+
+---
+
+# 3. Quarantine
+
+## What is Quarantine?
+
+Move a malicious file to a secure location where it cannot execute.
+
+---
+
+### Example
+
+```text
+invoice.exe
+
+↓
+
+Quarantine
+```
+
+The file becomes harmless.
+
+Later,
+
+the analyst can:
+
+* Restore it (if safe).
+* Permanently delete it.
+
+---
+
+# 4. Remote Access
+
+## What is Remote Access?
+
+EDR allows analysts to remotely connect to the endpoint's shell (command-line interface).
+
+---
+
+### Why?
+
+Analysts can:
+
+* Run commands.
+* Execute scripts.
+* Collect logs.
+* Investigate deeper.
+* Fix issues without visiting the device.
+
+---
+
+### Example
+
+Using CrowdStrike RTR (Real Time Response):
+
+```text
+dir
+
+ipconfig
+
+tasklist
+```
+
+All commands can be executed remotely.
+
+---
+
+# 5. Artefact Collection
+
+## What are Artefacts?
+
+**Artefacts (digital evidence collected during an investigation)**
+
+Used for:
+
+* Digital Forensics
+* Incident Investigation
+* Legal Evidence
+
+---
+
+### Common Artefacts
+
+### Memory Dump
+
+**Memory Dump (copy of the computer's RAM)**
+
+Useful for finding:
+
+* Running malware
+* Encryption keys
+* Active processes
+
+---
+
+### Event Logs
+
+Windows logs showing:
+
+* Logins
+* Errors
+* Program executions
+
+---
+
+### Folder Contents
+
+Copy important folders for investigation.
+
+Example:
+
+```text
+Downloads
+
+Desktop
+
+Documents
+```
+
+---
+
+### Registry Hives
+
+**Registry Hives (main sections of the Windows Registry)**
+
+Useful for finding:
+
+* Startup programs
+* User activity
+* Malware persistence
+
+---
+
+# Response Summary
+
+| Response Action         | Purpose                                        |
+| ----------------------- | ---------------------------------------------- |
+| **Isolate Host**        | Disconnect infected endpoint from the network  |
+| **Terminate Process**   | Stop a malicious running process               |
+| **Quarantine**          | Prevent a malicious file from executing        |
+| **Remote Access**       | Investigate and respond using a remote shell   |
+| **Artefact Collection** | Collect digital evidence for forensic analysis |
+
+--------------------
+
