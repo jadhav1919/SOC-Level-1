@@ -1,4 +1,4 @@
-# PayPal Phishing Email Analysis (Step by Step)
+# PayPal Phishing Email Analysis 
 
 Let's analyze the email like a **SOC Level 1 Security Analyst**.
 
