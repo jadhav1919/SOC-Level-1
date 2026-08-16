@@ -464,7 +464,7 @@ Verdict
 ```
 
 ------------------------
-# DKIM (DomainKeys Identified Mail) — Simple Notes
+# DKIM (DomainKeys Identified Mail) 
 
 **DKIM verifies that an email was actually sent by the claimed domain and that the message was not changed during transmission.**
 
@@ -528,7 +528,7 @@ No match ✗ → Reject or flag the email
 
 ---
 
-# How DKIM Works (Step by Step)
+# How DKIM Works 
 
 ## Step 1: The domain creates two keys
 
@@ -953,7 +953,7 @@ Write the report
 
 -----------------------------
 
-# DMARC (Domain-Based Message Authentication, Reporting, and Conformance) — Simple Notes
+# DMARC (Domain-Based Message Authentication, Reporting, and Conformance)
 
 **DMARC combines SPF and DKIM and tells the receiving mail server what to do if an email fails authentication.**
 
