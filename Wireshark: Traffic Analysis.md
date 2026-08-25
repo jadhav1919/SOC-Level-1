@@ -853,3 +853,933 @@ That means traffic intended for the gateway is being sent through the suspicious
 This provides much stronger evidence of a possible **MITM attack**.
 
 -------------------------
+
+#  Identifying Hosts and Users
+
+When investigating suspicious network traffic, knowing only:
+
+```text
+IP address → MAC address
+```
+
+is often **not enough**.
+
+You want to answer:
+
+```text
+Who is this?
+   ↓
+Which computer?
+   ↓
+Which user?
+   ↓
+Which domain?
+   ↓
+Is this the suspicious machine/user?
+```
+
+For example:
+
+```text
+10.10.10.25
+     ↓
+MAC: 00:11:22:33:44:55
+     ↓
+Hostname: HR-PC-07
+     ↓
+User: john
+     ↓
+Domain: company.org
+```
+
+That gives the analyst much more useful information.
+
+---
+
+# 1. Three Protocols You Need to Know
+
+The lesson focuses on three protocols:
+
+| Protocol           | Mainly helps identify              |
+| ------------------ | ---------------------------------- |
+| **DHCP**           | Hostname, IP, MAC, domain          |
+| **NBNS / NetBIOS** | Hostnames and IP information       |
+| **Kerberos**       | Users, hostnames, domain, services |
+
+Think of them like this:
+
+```text
+DHCP
+ ↓
+"What computer requested this IP?"
+
+NBNS
+ ↓
+"What is this computer called?"
+
+Kerberos
+ ↓
+"Which user/computer is authenticating?"
+```
+
+---
+
+# 2. DHCP Analysis
+
+## What is DHCP?
+
+DHCP automatically gives a device network information.
+
+For example:
+
+```text
+Laptop
+   |
+   | "I need an IP"
+   ↓
+DHCP Server
+   |
+   | "Use 192.168.1.25"
+   ↓
+Laptop
+```
+
+The DHCP server can provide:
+
+```text
+IP address
+Subnet mask
+Gateway
+DNS server
+Domain
+Lease time
+```
+
+Most importantly for our investigation, DHCP traffic can contain the **hostname and MAC address**.
+
+---
+
+# 3. Start With the Global DHCP Filter
+
+In Wireshark:
+
+```text
+dhcp
+```
+
+or:
+
+```text
+bootp
+```
+
+Why `bootp`?
+
+DHCP is technically implemented using the BOOTP protocol framework, so Wireshark commonly displays DHCP packets under the `bootp` protocol.
+
+So if:
+
+```text
+dhcp
+```
+
+doesn't give you what you expect, try:
+
+```text
+bootp
+```
+
+---
+
+# 4. DHCP Packet Types
+
+There are three important packet types in this lesson:
+
+```text
+DHCP REQUEST
+      ↓
+"What IP do I want?"
+
+DHCP ACK
+      ↓
+"Okay, you can have it."
+
+DHCP NAK
+      ↓
+"No, your request is rejected."
+```
+
+The important DHCP option is:
+
+### Option 53 — DHCP Message Type
+
+| DHCP type | Filter                  | Meaning               |
+| --------- | ----------------------- | --------------------- |
+| Request   | `dhcp.option.dhcp == 3` | Client requests an IP |
+| ACK       | `dhcp.option.dhcp == 5` | Server accepts        |
+| NAK       | `dhcp.option.dhcp == 6` | Server rejects        |
+
+---
+
+# 5. DHCP Request — Very Important
+
+Use:
+
+```text
+dhcp.option.dhcp == 3
+```
+
+This shows DHCP Request packets.
+
+Now look inside the packet.
+
+You may see:
+
+```text
+Option: (12) Host Name
+    Host Name: JOHN-PC
+
+Option: (50) Requested IP Address
+    Requested IP Address: 192.168.1.25
+
+Option: (51) IP Address Lease Time
+    Lease Time: 86400
+
+Option: (61) Client Identifier
+    MAC Address: 00:11:22:33:44:55
+```
+
+This is extremely useful.
+
+---
+
+# 6. DHCP Option 12 — Hostname
+
+### Option 12 = Hostname
+
+Example:
+
+```text
+Option 12
+Hostname: JOHN-PC
+```
+
+Now you know:
+
+```text
+IP requested:
+192.168.1.25
+
+Hostname:
+JOHN-PC
+```
+
+You can search for a particular hostname using:
+
+```text
+dhcp.option.hostname contains "JOHN"
+```
+
+For example:
+
+```text
+dhcp.option.hostname contains "HR"
+```
+
+could find:
+
+```text
+HR-PC-01
+HR-LAPTOP
+HR-ADMIN
+```
+
+---
+
+# 7. DHCP Option 50 — Requested IP
+
+### Option 50 = Requested IP address
+
+Example:
+
+```text
+Option 50:
+192.168.1.25
+```
+
+This tells you:
+
+> "The client is asking for this IP address."
+
+So you can connect:
+
+```text
+Hostname → Requested IP
+```
+
+Example:
+
+```text
+JOHN-PC
+   ↓
+192.168.1.25
+```
+
+---
+
+# 8. DHCP Option 51 — Lease Time
+
+### Option 51 = IP lease time
+
+Example:
+
+```text
+Lease Time: 86400 seconds
+```
+
+That means the client can use the assigned IP for that period, subject to DHCP renewal.
+
+For host identification, this is usually **less important** than hostname/IP/MAC.
+
+---
+
+# 9. DHCP Option 61 — Client Identifier
+
+This can contain the client's MAC address or another client identifier.
+
+Example:
+
+```text
+Client Identifier:
+00:11:22:33:44:55
+```
+
+Now you can connect:
+
+```text
+Hostname
+   ↓
+JOHN-PC
+
+IP
+   ↓
+192.168.1.25
+
+MAC
+   ↓
+00:11:22:33:44:55
+```
+
+That's much better than looking at the IP alone.
+
+---
+
+# 10. DHCP ACK
+
+Now use:
+
+```text
+dhcp.option.dhcp == 5
+```
+
+This shows **DHCP ACK** packets.
+
+ACK means:
+
+```text
+Client:
+"I want 192.168.1.25"
+
+Server:
+"Approved."
+```
+
+The ACK can provide useful information such as:
+
+### Option 15 — Domain Name
+
+Example:
+
+```text
+Domain Name:
+company.org
+```
+
+Filter:
+
+```text
+dhcp.option.domain_name contains "company"
+```
+
+Now you might establish:
+
+```text
+Hostname: JOHN-PC
+IP:       192.168.1.25
+Domain:   company.org
+```
+
+---
+
+# 11. DHCP NAK
+
+Use:
+
+```text
+dhcp.option.dhcp == 6
+```
+
+NAK means:
+
+```text
+Client:
+"I want this IP."
+
+Server:
+"No."
+```
+
+The useful option here is:
+
+### Option 56 — Message
+
+It may contain a reason such as:
+
+```text
+Requested address is not available
+```
+
+or another DHCP-specific rejection message.
+
+The important point is:
+
+**Don't blindly filter for a particular message. Read it.**
+
+Because the actual reason can vary from investigation to investigation.
+
+---
+
+#  DHCP — Remember This
+
+```text
+DHCP REQUEST
+│
+├── Option 12 → Hostname
+├── Option 50 → Requested IP
+├── Option 51 → Lease time
+└── Option 61 → Client identifier / MAC
+
+DHCP ACK
+│
+├── Option 15 → Domain
+└── Option 51 → Lease time
+
+DHCP NAK
+│
+└── Option 56 → Rejection message
+```
+
+---
+
+# 12. NetBIOS / NBNS
+
+Now let's move to **NetBIOS Name Service (NBNS)**.
+
+NBNS helps computers discover names on a network.
+
+Think of it like asking:
+
+```text
+"What computer owns this name?"
+```
+
+For example:
+
+```text
+Who is WEB-PC?
+
+        ↓
+
+192.168.1.50
+```
+
+So NBNS can help associate:
+
+```text
+Hostname ↔ IP address
+```
+
+---
+
+# 13. Start NBNS Investigation
+
+Use:
+
+```text
+nbns
+```
+
+This displays NetBIOS Name Service traffic.
+
+You may see information such as:
+
+```text
+Name: JOHN-PC
+IP:   192.168.1.25
+```
+
+Now you have another way of identifying the host.
+
+---
+
+# 14. NBNS Name Filter
+
+You can search for a specific name:
+
+```text
+nbns.name contains "JOHN"
+```
+
+For example:
+
+```text
+nbns.name contains "SERVER"
+```
+
+might reveal names such as:
+
+```text
+FILE-SERVER
+SQL-SERVER
+BACKUP-SERVER
+```
+
+This can be particularly useful when investigating suspicious traffic.
+
+---
+
+# 15. Why NBNS Is Useful
+
+Suppose you see suspicious traffic:
+
+```text
+192.168.1.25 → 192.168.1.10
+```
+
+You don't know what `192.168.1.25` is.
+
+You search NBNS:
+
+```text
+nbns
+```
+
+and find:
+
+```text
+192.168.1.25
+      ↓
+JOHN-PC
+```
+
+Now the investigation becomes:
+
+```text
+Suspicious IP
+     ↓
+192.168.1.25
+     ↓
+Hostname
+     ↓
+JOHN-PC
+```
+
+Much easier to investigate.
+
+---
+
+# 16. Kerberos
+
+Now we get to one of the **most useful protocols for identifying users in Windows domains**.
+
+Kerberos is an authentication protocol commonly used in Microsoft Windows domain environments.
+
+Think:
+
+```text
+Computer/User
+     |
+     | "I want to access something"
+     ↓
+Kerberos
+     |
+     | Authentication / ticket
+     ↓
+Domain services
+```
+
+So Kerberos traffic can reveal **user and domain information**.
+
+---
+
+# 17. Start With:
+
+```text
+kerberos
+```
+
+This shows Kerberos traffic.
+
+---
+
+# 18. Finding Users
+
+One important field is:
+
+```text
+CNameString
+```
+
+This can contain the client name.
+
+For example:
+
+```text
+CNameString: john
+```
+
+That can identify a user.
+
+Search for a specific name:
+
+```text
+kerberos.CNameString contains "john"
+```
+
+---
+
+# 19. The `$` Trick — Very Important
+
+This is one of the most important things to understand.
+
+In Windows environments, computer accounts commonly end with:
+
+```text
+$
+```
+
+For example:
+
+```text
+JOHN-PC$
+```
+
+is generally a **computer account**.
+
+Whereas:
+
+```text
+john
+```
+
+is a **user account**.
+
+So:
+
+```text
+JOHN-PC$
+```
+
+→ computer/host
+
+```text
+john
+```
+
+→ user
+
+Think:
+
+```text
+CNameString
+      |
+      +---- ends with $ ----> HOST
+      |
+      +---- no $ -----------> USER
+```
+
+---
+
+# 20. Finding Only Usernames
+
+The lesson gives:
+
+```text
+kerberos.CNameString and !(kerberos.CNameString contains "$")
+```
+
+Let's break it down.
+
+### First part:
+
+```text
+kerberos.CNameString
+```
+
+means:
+
+> Show packets containing the CNameString field.
+
+### Second part:
+
+```text
+!( ... )
+```
+
+means:
+
+> NOT.
+
+So:
+
+```text
+!(kerberos.CNameString contains "$")
+```
+
+means:
+
+> Exclude values containing `$`.
+
+Therefore:
+
+```text
+kerberos.CNameString and !(kerberos.CNameString contains "$")
+```
+
+roughly gives you:
+
+```text
+User accounts
+```
+
+instead of computer accounts.
+
+---
+
+# 21. Kerberos Important Fields
+
+There are several fields worth remembering.
+
+| Field         | What it tells you            |
+| ------------- | ---------------------------- |
+| `CNameString` | Client/user or computer name |
+| `pvno`        | Kerberos protocol version    |
+| `realm`       | Kerberos domain/realm        |
+| `sname`       | Service name                 |
+| `addresses`   | Client address information   |
+
+---
+
+# 22. `pvno`
+
+Filter:
+
+```text
+kerberos.pvno == 5
+```
+
+This looks for Kerberos version 5.
+
+---
+
+# 23. `realm`
+
+The realm generally identifies the Kerberos authentication domain.
+
+For example:
+
+```text
+REALM:
+COMPANY.ORG
+```
+
+You can search:
+
+```text
+kerberos.realm contains ".org"
+```
+
+So you might discover:
+
+```text
+COMPANY.ORG
+```
+
+---
+
+# 24. `sname`
+
+The service name tells you what service the Kerberos ticket relates to.
+
+The lesson gives:
+
+```text
+kerberos.SNameString == "krbtg"
+```
+
+This can help identify Kerberos ticket-related activity involving the Ticket Granting Service.
+
+---
+
+# 25. `addresses`
+
+This field can provide client IP information and NetBIOS-related name information.
+
+**Important:** according to the lesson, this information is available in **request packets**.
+
+So when investigating a request, don't forget to inspect:
+
+```text
+addresses
+```
+
+---
+
+#  Putting Everything Together
+
+This is the really important part.
+
+Imagine you discover suspicious traffic from:
+
+```text
+192.168.1.25
+```
+
+You don't know who owns it.
+
+You can investigate step-by-step.
+
+### Step 1 — DHCP
+
+Search:
+
+```text
+dhcp
+```
+
+You discover:
+
+```text
+Hostname:
+JOHN-PC
+
+Requested IP:
+192.168.1.25
+
+MAC:
+00:11:22:33:44:55
+```
+
+Now:
+
+```text
+192.168.1.25
+      ↓
+JOHN-PC
+```
+
+---
+
+### Step 2 — NBNS
+
+Search:
+
+```text
+nbns.name contains "JOHN"
+```
+
+You find:
+
+```text
+JOHN-PC
+192.168.1.25
+```
+
+This provides another piece of evidence connecting the hostname to the IP.
+
+---
+
+### Step 3 — Kerberos
+
+Search:
+
+```text
+kerberos.CNameString contains "john"
+```
+
+You might find:
+
+```text
+CNameString: john
+```
+
+Now you can potentially establish:
+
+```text
+IP
+│
+└── 192.168.1.25
+        │
+        ↓
+Hostname
+│
+└── JOHN-PC
+        │
+        ↓
+User
+│
+└── john
+        │
+        ↓
+Domain
+│
+└── COMPANY.ORG
+```
+
+That's what **host and user identification** means in a network investigation.
+
+---
+
+#  The Three Protocols — Easy Memory Trick
+
+Remember:
+
+```text
+             HOST / USER IDENTIFICATION
+                        │
+          ┌─────────────┼─────────────┐
+          ↓             ↓             ↓
+        DHCP          NBNS         Kerberos
+          │             │             │
+          ↓             ↓             ↓
+      Hostname       Hostname        User
+      IP              IP             Domain
+      MAC                            Service
+      Domain
+```
+
+### DHCP
+
+> **"What computer got this IP?"**
+
+### NBNS
+
+> **"What is this computer called?"**
+
+### Kerberos
+
+> **"Which user/computer is authenticating?"**
+
+--------------------------------
+
+
