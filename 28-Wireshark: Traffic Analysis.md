@@ -1782,4 +1782,54 @@ Remember:
 
 --------------------------------
 
+# What is tunnelling?
 
+**Tunnelling = putting hidden data inside normal-looking network traffic.**
+
+Think of:
+
+```text
+Normal envelope
+     ↓
+Looks harmless
+     ↓
+But contains a secret letter
+```
+
+In networking:
+
+```text
+Normal ICMP
+     ↓
+Ping
+```
+
+An attacker can instead do:
+
+```text
+ICMP packet
+     ↓
+Looks like normal ICMP
+     +
+Hidden attacker data
+```
+
+So the firewall may think:
+
+> "It's just ICMP traffic. Nothing unusual."
+
+But the attacker is actually using it to transfer data.
+
+### Why attackers use it
+
+They may hide:
+
+* **Commands** from an attacker (C2)
+* **Stolen data** leaving the network (exfiltration)
+
+The two protocols we'll study are:
+
+```text
+ICMP → ping traffic
+DNS  → domain-name lookup traffic
+```
