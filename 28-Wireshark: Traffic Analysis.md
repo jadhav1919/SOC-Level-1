@@ -6297,3 +6297,1333 @@ That could represent **web enumeration/probing**.
 Not proof by itself—but definitely worth investigating.
 
 -------------------------
+
+
+# Decrypting HTTPS Traffic — Learn It + GitHub Revision Notes
+
+This topic becomes much easier if you first understand **what encryption changes in Wireshark**.
+
+With HTTP:
+
+```text
+Browser
+   |
+   | GET /login
+   | username=admin
+   ↓
+Server
+```
+
+Wireshark can potentially see the actual HTTP contents.
+
+With HTTPS:
+
+```text
+Browser
+   |
+   | 🔒 Encrypted HTTP
+   ↓
+   TLS
+   ↓
+Server
+```
+
+Wireshark can see that communication is happening, but **the actual HTTP contents are encrypted**.
+
+The main skill in this section is learning how a **TLS key log file** allows Wireshark to decrypt a captured HTTPS session.
+
+---
+
+# 1. What is HTTPS?
+
+**HTTPS = HTTP Secure**
+
+HTTPS is essentially HTTP communication protected by **TLS (Transport Layer Security)**.
+
+Think:
+
+```text
+HTTP
+ ↓
+Web communication
+
+HTTPS
+ ↓
+HTTP
+ +
+TLS encryption
+```
+
+So:
+
+```text
+HTTP
+  ↓
+GET /login
+  ↓
+Readable
+
+HTTPS
+  ↓
+Encrypted HTTP
+  ↓
+Not directly readable
+```
+
+---
+
+# 2. Why Do We Need HTTPS?
+
+HTTP sends information without encryption.
+
+HTTPS protects communication against threats such as:
+
+* Sniffing
+* Interception
+* Unauthorized observation
+* Some forms of spoofing/MITM attacks
+
+For example, with HTTP:
+
+```text
+Client
+   |
+   | username=alice
+   | password=12345
+   ↓
+Server
+```
+
+Someone capable of capturing the traffic may be able to see the information.
+
+With HTTPS:
+
+```text
+Client
+   |
+   | 🔒 encrypted data
+   ↓
+Server
+```
+
+The captured packets don't directly reveal the HTTP content.
+
+---
+
+# 3. But Why Does a Security Analyst Need to Decrypt HTTPS?
+
+This is a very important security concept.
+
+You might think:
+
+> "Encryption is good, so why would an analyst want to decrypt it?"
+
+Because attackers also use HTTPS.
+
+For example:
+
+```text
+Malware
+   |
+   | HTTPS
+   ↓
+Attacker's C2 server
+```
+
+To the network, this may look like ordinary encrypted web traffic.
+
+HTTPS can therefore hide:
+
+* C2 communication
+* Malicious requests
+* Data exfiltration
+* Malicious payloads
+* Web activity
+
+So during an authorized investigation, an analyst may need to decrypt the traffic to understand what actually happened.
+
+---
+
+# 4. What Does Wireshark See Without Decryption?
+
+Suppose the browser sends:
+
+```text
+GET /login
+Host: example.com
+Cookie: abc123
+```
+
+With normal HTTP, Wireshark can potentially display:
+
+```text
+GET /login
+Host: example.com
+Cookie: abc123
+```
+
+With HTTPS, Wireshark may instead show something like:
+
+```text
+TLS Application Data
+Encrypted Application Data
+```
+
+Conceptually:
+
+```text
+WITHOUT TLS
+
+GET /login
+Host: example.com
+username=alice
+
+
+WITH TLS
+
+Encrypted TLS Data
+xxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxx
+```
+
+The important point:
+
+> **Wireshark can capture the encrypted packets, but it cannot simply read the original HTTP contents.**
+
+---
+
+# 5. Very Important: Capturing ≠ Decrypting
+
+This distinction is essential.
+
+```text
+Packet capture
+     ↓
+You have the encrypted packets
+```
+
+does **not** mean:
+
+```text
+Packet capture
+     ↓
+You automatically know the plaintext
+```
+
+You need the appropriate cryptographic session secrets.
+
+That's where the **TLS key log file** comes in.
+
+---
+
+# 6. TLS Handshake
+
+Before encrypted application data is exchanged, TLS performs a handshake.
+
+A simplified view:
+
+```text
+Client                         Server
+  |                              |
+  | ------ Client Hello ------> |
+  |                              |
+  | <------ Server Hello ------ |
+  |                              |
+  |   TLS negotiation continues  |
+  |                              |
+  | ===== Encrypted traffic ===>|
+```
+
+The first two messages are especially important:
+
+```text
+Client Hello
+Server Hello
+```
+
+---
+
+# 7. Client Hello
+
+The client begins the TLS handshake by sending a **Client Hello**.
+
+Conceptually:
+
+```text
+Browser
+   |
+   | Client Hello
+   ↓
+Server
+```
+
+Wireshark filter:
+
+```text
+tls.handshake.type == 1
+```
+
+Meaning:
+
+> Show TLS Client Hello packets.
+
+---
+
+# 8. Server Hello
+
+The server responds with a **Server Hello**.
+
+```text
+Client
+   |
+   | Client Hello
+   ↓
+Server
+   |
+   | Server Hello
+   ↓
+Client
+```
+
+Wireshark:
+
+```text
+tls.handshake.type == 2
+```
+
+Meaning:
+
+> Show TLS Server Hello packets.
+
+---
+
+# 9. Easy Memory Trick
+
+Remember:
+
+```text
+TLS handshake:
+
+1 → Client Hello
+2 → Server Hello
+```
+
+So:
+
+```text
+tls.handshake.type == 1
+          ↓
+      Client Hello
+
+tls.handshake.type == 2
+          ↓
+      Server Hello
+```
+
+This is one of the easiest things to memorize.
+
+---
+
+# 10. Why Are Client Hello and Server Hello Useful?
+
+Suppose you have a large PCAP.
+
+You want to know:
+
+> "Which IP addresses are involved in TLS connections?"
+
+You can filter:
+
+```text
+tls.handshake.type == 1
+```
+
+and:
+
+```text
+tls.handshake.type == 2
+```
+
+Then inspect:
+
+```text
+Source IP
+Destination IP
+```
+
+For example:
+
+```text
+192.168.1.20
+       |
+       | Client Hello
+       ↓
+142.250.x.x
+       |
+       | Server Hello
+       ↓
+192.168.1.20
+```
+
+You now know that those two IP addresses participated in the TLS handshake.
+
+---
+
+# 11. Why Does the Material Use `http.request` Too?
+
+The provided filters are:
+
+### Client Hello
+
+```text
+(http.request or tls.handshake.type == 1) and !(ssdp)
+```
+
+### Server Hello
+
+```text
+(http.request or tls.handshake.type == 2) and !(ssdp)
+```
+
+This looks complicated, so let's break it down.
+
+---
+
+## First part
+
+```text
+tls.handshake.type == 1
+```
+
+means:
+
+```text
+Client Hello
+```
+
+And:
+
+```text
+tls.handshake.type == 2
+```
+
+means:
+
+```text
+Server Hello
+```
+
+---
+
+## What is `http.request` doing?
+
+It includes HTTP request traffic in the result.
+
+So:
+
+```text
+(http.request or tls.handshake.type == 1)
+```
+
+means:
+
+> Show HTTP requests OR TLS Client Hello packets.
+
+---
+
+# 12. What is SSDP?
+
+The material mentions:
+
+**SSDP = Simple Service Discovery Protocol**
+
+SSDP is used for discovering network services/devices.
+
+For example:
+
+```text
+Device
+  |
+  | "What services are available?"
+  ↓
+Network
+```
+
+Wireshark filter:
+
+```text
+ssdp
+```
+
+The filter:
+
+```text
+!(ssdp)
+```
+
+means:
+
+> Exclude SSDP packets.
+
+Remember:
+
+```text
+!
+```
+
+means **NOT** in a Wireshark filter.
+
+So:
+
+```text
+!(ssdp)
+```
+
+means:
+
+```text
+NOT SSDP
+```
+
+---
+
+# 13. The Most Important Part: TLS Key Log File
+
+Now we reach the core of this lesson.
+
+A **TLS key log file** is a text file containing session secrets that Wireshark can use to decrypt captured TLS traffic.
+
+Think of it like this:
+
+```text
+Encrypted PCAP
+      +
+TLS session secrets
+      ↓
+Wireshark
+      ↓
+Decrypted traffic
+```
+
+Without the necessary secrets:
+
+```text
+PCAP
+ ↓
+🔒 Encrypted
+```
+
+With the appropriate key log:
+
+```text
+PCAP + Key Log
+      ↓
+Wireshark
+      ↓
+🔓 Decrypted
+```
+
+---
+
+# 14. Why Is the Key Log Needed?
+
+Imagine this:
+
+```text
+Browser                    Server
+   |                         |
+   | TLS handshake           |
+   |------------------------>|
+   |<------------------------|
+   |                         |
+   | Encrypted session       |
+   |========================>|
+```
+
+The TLS session establishes cryptographic secrets.
+
+Those secrets are what allow the session's encrypted data to be decrypted.
+
+The browser can write the relevant secrets to a file:
+
+```text
+SSLKEYLOGFILE
+```
+
+Then Wireshark can use that file.
+
+---
+
+# 15. SSLKEYLOGFILE
+
+The environment variable is commonly named:
+
+```text
+SSLKEYLOGFILE
+```
+
+The basic workflow is:
+
+```text
+Configure browser/environment
+          ↓
+Browser creates TLS session
+          ↓
+Session secrets are written
+          ↓
+SSLKEYLOGFILE
+          ↓
+Wireshark loads the key log
+          ↓
+Captured TLS traffic can be decrypted
+```
+
+---
+
+# 16. VERY Important Timing Rule
+
+This is one of the most important points in the entire lesson.
+
+The key log must correspond to the TLS sessions you captured.
+
+Therefore:
+
+> **You need to capture the traffic while the browser is generating the key log entries.**
+
+Think:
+
+```text
+Browser creates session
+        ↓
+Session keys generated
+        ↓
+Key log entry created
+        ↓
+Traffic captured
+```
+
+If you capture traffic today but don't have the appropriate session secrets:
+
+```text
+Yesterday:
+Traffic captured
+     ↓
+Encrypted PCAP
+```
+
+and then later try to generate unrelated keys:
+
+```text
+Today:
+New TLS session
+     ↓
+Different session secrets
+```
+
+those new keys won't magically decrypt yesterday's session.
+
+---
+
+# 17. Why Are TLS Keys Per Session?
+
+A simplified concept is:
+
+```text
+Session 1
+   ↓
+Keys A
+
+Session 2
+   ↓
+Keys B
+
+Session 3
+   ↓
+Keys C
+```
+
+Therefore:
+
+```text
+PCAP Session 1
+       +
+Keys B
+       ↓
+❌ Won't match
+```
+
+But:
+
+```text
+PCAP Session 1
+       +
+Keys A
+       ↓
+✅ Can potentially decrypt
+```
+
+This is why the correct key log must be available **during the capture**.
+
+---
+
+# 18. Wireshark Decryption Workflow
+
+The complete workflow is:
+
+```text
+1. Start packet capture
+        ↓
+2. Configure browser to create SSLKEYLOGFILE
+        ↓
+3. Visit HTTPS website
+        ↓
+4. Browser writes TLS session secrets
+        ↓
+5. Stop capture
+        ↓
+6. Open PCAP in Wireshark
+        ↓
+7. Give Wireshark the key log file
+        ↓
+8. Wireshark decrypts matching TLS sessions
+        ↓
+9. Analyze the recovered traffic
+```
+
+---
+
+# 19. Adding the Key Log File in Wireshark
+
+The material gives two approaches.
+
+### Option 1 — Right-click
+
+You can use the relevant Wireshark context menu to configure the TLS key log file.
+
+### Option 2 — Preferences
+
+Go through:
+
+```text
+Edit
+  ↓
+Preferences
+  ↓
+Protocols
+  ↓
+TLS
+```
+
+Then configure the key log file.
+
+The exact UI can vary slightly between Wireshark versions, but the concept remains:
+
+```text
+Wireshark
+   ↓
+TLS preferences
+   ↓
+Key log file
+```
+
+---
+
+# 20. Before Key Log vs After Key Log
+
+This is the easiest way to understand what the key log accomplishes.
+
+### Without key log
+
+```text
+Packet
+ ↓
+TLS
+ ↓
+Encrypted Application Data
+ ↓
+Cannot see original HTTP contents
+```
+
+### With matching key log
+
+```text
+Packet
+ ↓
+TLS
+ ↓
+Decrypt
+ ↓
+HTTP / HTTP2 information
+ ↓
+Readable application data
+```
+
+So the key log does **not** remove encryption from the network.
+
+It gives Wireshark the information required to decrypt the captured session.
+
+---
+
+# 21. What Becomes Visible After Decryption?
+
+This is where HTTPS analysis becomes very powerful.
+
+Before:
+
+```text
+TLS Application Data
+```
+
+After successful decryption, you may see things such as:
+
+```text
+HTTP request
+HTTP response
+HTTP/2 details
+Headers
+Data
+```
+
+You may also see information such as:
+
+```text
+GET /login
+Host: example.com
+User-Agent: Mozilla/5.0
+```
+
+depending on the traffic and protocol.
+
+---
+
+# 22. HTTP/2 After Decryption
+
+This is particularly important because modern websites may use HTTP/2.
+
+Without decryption:
+
+```text
+TLS
+ ↓
+Encrypted application data
+```
+
+With decryption:
+
+```text
+TLS
+ ↓
+HTTP/2
+ ↓
+Headers
+Streams
+Requests
+Responses
+```
+
+So decrypting HTTPS can expose **HTTP/2 packet details** that weren't understandable before.
+
+---
+
+# 23. Different Data Views in Wireshark
+
+The material lists several representations you may encounter.
+
+## Frame
+
+The complete captured network frame.
+
+Think:
+
+```text
+Frame
+ ↓
+Everything captured for that packet
+```
+
+---
+
+## Decrypted TLS
+
+The TLS layer after Wireshark has successfully decrypted it.
+
+```text
+Encrypted TLS
+      ↓
+Key log
+      ↓
+Decrypted TLS
+```
+
+---
+
+## Decompressed Header
+
+Some HTTP/2 header information may be compressed.
+
+After processing, Wireshark may show:
+
+```text
+Decompressed Header
+```
+
+This allows the analyst to inspect the header information more easily.
+
+---
+
+## Reassembled TCP
+
+TCP may split application data across multiple packets.
+
+For example:
+
+```text
+Packet 1 → "GET /lo"
+Packet 2 → "gin"
+Packet 3 → " HTTP/1.1"
+```
+
+Wireshark can reassemble those pieces:
+
+```text
+GET /login HTTP/1.1
+```
+
+That's:
+
+```text
+Reassembled TCP
+```
+
+---
+
+## Reassembled SSL
+
+Similarly, encrypted TLS/SSL data may span multiple packets.
+
+Wireshark can reassemble it for analysis.
+
+---
+
+# 24. Why Reassembly Matters
+
+This is an important networking concept.
+
+A large piece of application data doesn't necessarily fit into one packet.
+
+For example:
+
+```text
+Application data:
+
+"POST /login username=admin password=test"
+```
+
+may become:
+
+```text
+TCP Packet 1:
+POST /log
+
+TCP Packet 2:
+in username=
+
+TCP Packet 3:
+admin password=
+
+TCP Packet 4:
+test
+```
+
+Wireshark needs to reconstruct the original stream:
+
+```text
+POST /login username=admin password=test
+```
+
+So:
+
+```text
+Packets
+  ↓
+TCP reassembly
+  ↓
+Complete data
+```
+
+---
+
+# 25. A Simple HTTPS Investigation Example
+
+Imagine you capture:
+
+```text
+192.168.1.10
+       |
+       | HTTPS
+       ↓
+example.com
+```
+
+Without a key log:
+
+```text
+Client Hello
+Server Hello
+Encrypted Application Data
+Encrypted Application Data
+Encrypted Application Data
+```
+
+You can identify:
+
+```text
+Client IP
+Server IP
+TLS handshake
+Timing
+Packet sizes
+```
+
+But you can't directly read the application content.
+
+---
+
+## Now add the matching key log
+
+```text
+PCAP
+ +
+SSLKEYLOGFILE
+ ↓
+Wireshark
+```
+
+Now you may see:
+
+```text
+Client
+ ↓
+GET /login
+ ↓
+Server
+
+200 OK
+ ↓
+Response data
+```
+
+Now you can investigate the **actual application behavior**.
+
+---
+
+# 26. HTTPS Investigation Mindset
+
+Don't stop after seeing:
+
+```text
+TLS
+```
+
+Ask:
+
+### WHO?
+
+```text
+Who is the client?
+Who is the server?
+```
+
+### WHEN?
+
+```text
+When did the TLS session start?
+```
+
+### WHAT?
+
+```text
+What HTTP/HTTP2 requests were made?
+```
+
+### WHERE?
+
+```text
+Which server/host was contacted?
+```
+
+### WHY?
+
+```text
+Could this be:
+- normal browsing?
+- malware C2?
+- data exfiltration?
+- suspicious web activity?
+```
+
+---
+
+# 27. Why Attackers Like HTTPS
+
+Imagine malware communicating with its C2 server.
+
+Without encryption:
+
+```text
+Malware
+   |
+   | GET /command?id=123
+   ↓
+C2 Server
+```
+
+An analyst might immediately recognize the malicious communication.
+
+With HTTPS:
+
+```text
+Malware
+   |
+   | 🔒 encrypted
+   ↓
+C2 Server
+```
+
+The content is hidden.
+
+Therefore:
+
+> **HTTPS is good for legitimate security, but attackers can also use the same protection to hide malicious traffic.**
+
+This is why encrypted traffic analysis is important for SOC/IR analysts.
+
+---
+
+# 28. HTTP vs HTTPS — Connect Your Previous Lessons
+
+You already learned HTTP analysis.
+
+Now compare:
+
+| HTTP                              | HTTPS                                            |
+| --------------------------------- | ------------------------------------------------ |
+| Cleartext                         | Encrypted                                        |
+| `http` filter                     | `tls` / decrypted HTTP                           |
+| Requests visible                  | Requests hidden until decrypted                  |
+| URI visible                       | URI may be hidden from packet inspection         |
+| Headers visible                   | Headers encrypted                                |
+| Data visible                      | Data encrypted                                   |
+| No key required to read plaintext | Matching session secrets required for decryption |
+
+The investigation changes from:
+
+```text
+HTTP:
+
+Filter
+ ↓
+Read request
+ ↓
+Analyze
+```
+
+to:
+
+```text
+HTTPS:
+
+Find TLS session
+ ↓
+Obtain matching session secrets
+ ↓
+Configure Wireshark
+ ↓
+Decrypt
+ ↓
+Analyze HTTP/HTTP2
+```
+
+---
+
+# 29. Most Important Wireshark Filters
+
+Keep these for revision.
+
+### General
+
+```text
+http.request
+```
+
+Find HTTP requests.
+
+```text
+tls
+```
+
+Find TLS traffic.
+
+```text
+ssdp
+```
+
+Find SSDP traffic.
+
+---
+
+### TLS Client Hello
+
+```text
+tls.handshake.type == 1
+```
+
+Remember:
+
+```text
+1 = Client Hello
+```
+
+---
+
+### TLS Server Hello
+
+```text
+tls.handshake.type == 2
+```
+
+Remember:
+
+```text
+2 = Server Hello
+```
+
+---
+
+### Client Hello with the provided combined filter
+
+```text
+(http.request or tls.handshake.type == 1) and !(ssdp)
+```
+
+### Server Hello with the provided combined filter
+
+```text
+(http.request or tls.handshake.type == 2) and !(ssdp)
+```
+
+---
+
+# 30. The Key Log File — The Most Important Concept
+
+Memorize this:
+
+```text
+Browser
+   |
+   | TLS session
+   ↓
+Session secrets
+   |
+   ↓
+SSLKEYLOGFILE
+   |
+   ↓
+Wireshark
+   |
+   ↓
+Decrypt matching PCAP traffic
+```
+
+### And remember:
+
+```text
+NO MATCHING KEY
+      ↓
+Encrypted traffic
+      ↓
+Cannot decrypt
+
+MATCHING KEY
+      ↓
+Encrypted traffic
+      +
+Session secrets
+      ↓
+Can potentially decrypt
+```
+
+---
+
+# 31. Common Mistake
+
+### Mistake:
+
+> "I captured HTTPS traffic, so I can decrypt it later."
+
+Not necessarily.
+
+You need the appropriate session secrets.
+
+Correct:
+
+```text
+Capture traffic
+      +
+Capture/generate matching TLS secrets
+      ↓
+Wireshark
+      ↓
+Decryption
+```
+
+The key log must correspond to the captured sessions.
+
+---
+
+# 32. Complete Mental Model
+
+This is the section I recommend memorizing:
+
+```text
+                    HTTPS
+                      |
+                      ↓
+                  HTTP + TLS
+                      |
+                      ↓
+              TLS Handshake
+                      |
+            ┌─────────┴─────────┐
+            ↓                   ↓
+      Client Hello         Server Hello
+            |                   |
+           1                     2
+            └─────────┬─────────┘
+                      ↓
+              Encrypted Traffic
+                      |
+                      ↓
+              ┌───────────────┐
+              │   PCAP        │
+              └───────┬───────┘
+                      |
+               Matching key log
+                      |
+                      ↓
+                 Wireshark
+                      |
+                      ↓
+                  Decryption
+                      |
+          ┌───────────┼───────────┐
+          ↓           ↓           ↓
+       HTTP       HTTP/2       Headers
+          |           |           |
+          └───────────┼───────────┘
+                      ↓
+               Security Analysis
+```
+
+-----------------
