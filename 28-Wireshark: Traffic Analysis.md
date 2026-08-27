@@ -7627,3 +7627,1519 @@ This is the section I recommend memorizing:
 ```
 
 -----------------
+
+# Bonus: Hunt Cleartext Credentials — Learn It + GitHub Revision Notes
+
+This section connects **everything you've learned so far**.
+
+You already learned:
+
+* FTP can expose usernames/passwords.
+* HTTP can expose credentials and form data.
+* Wireshark can filter specific packets.
+* But looking at packets one by one can be slow.
+
+This section teaches you a faster way to **find cleartext credentials in a PCAP**.
+
+---
+
+# 1. What Are Cleartext Credentials?
+
+**Cleartext credentials** are authentication details transmitted without encryption.
+
+For example:
+
+```text
+Client
+   |
+   | USER admin
+   | PASS password123
+   ↓
+Server
+```
+
+If the protocol is cleartext, the packet capture may contain:
+
+```text
+Username: admin
+Password: password123
+```
+
+This is obviously sensitive information.
+
+---
+
+# 2. Why Is Hunting Credentials Difficult?
+
+Imagine a PCAP contains:
+
+```text
+Packet 101 → USER admin
+Packet 102 → PASS password1
+
+Packet 205 → USER admin
+Packet 206 → PASS password2
+
+Packet 309 → USER admin
+Packet 310 → PASS password3
+
+Packet 414 → USER admin
+Packet 415 → PASS password4
+```
+
+Looking at packets individually is tedious.
+
+The analyst has to mentally reconstruct:
+
+```text
+admin → password1 → failed
+admin → password2 → failed
+admin → password3 → failed
+admin → password4 → success
+```
+
+That's difficult in a large capture.
+
+---
+
+# 3. Why a List Is Better
+
+Instead of manually looking through hundreds of packets, imagine Wireshark gives you:
+
+```text
+Protocol | Username | Password/Info
+------------------------------------
+FTP      | admin    | password1
+FTP      | admin    | password2
+FTP      | admin    | password3
+FTP      | admin    | password4
+```
+
+Now the pattern becomes immediately visible.
+
+You can quickly ask:
+
+```text
+Are there many attempts?
+       ↓
+Same username?
+       ↓
+Different passwords?
+       ↓
+Successful attempt eventually?
+       ↓
+Possible brute-force activity?
+```
+
+This is the main purpose of the feature.
+
+---
+
+# 4. Wireshark Credentials Feature
+
+Wireshark provides a feature that can extract certain cleartext credentials from supported protocols.
+
+Go to:
+
+```text
+Tools
+  ↓
+Credentials
+```
+
+This opens a credentials window.
+
+Conceptually:
+
+```text
+Wireshark
+   |
+   └── Tools
+         |
+         └── Credentials
+                |
+                ↓
+        Detected credentials
+```
+
+---
+
+# 5. Which Protocols Are Supported?
+
+According to the material, Wireshark dissectors can extract cleartext passwords from protocols including:
+
+```text
+FTP
+HTTP
+IMAP
+POP
+SMTP
+```
+
+Remember this list:
+
+> **FTP, HTTP, IMAP, POP, SMTP**
+
+These are the important protocols for this feature.
+
+---
+
+# 6. What Is a Dissector?
+
+You will see the word **dissector** frequently when learning Wireshark.
+
+A Wireshark dissector is essentially the component that understands a particular protocol and breaks its packets into meaningful fields.
+
+Think:
+
+```text
+Raw packet
+    ↓
+Wireshark dissector
+    ↓
+Understands protocol
+    ↓
+Username
+Password
+Command
+Response
+etc.
+```
+
+For example:
+
+```text
+FTP packet
+    ↓
+FTP dissector
+    ↓
+USER admin
+PASS password123
+```
+
+This is how Wireshark knows what different parts of the packet represent.
+
+---
+
+# 7. What Does the Credentials Window Show?
+
+The material says the window provides information such as:
+
+* Packet number
+* Protocol
+* Username
+* Additional information
+
+Conceptually:
+
+```text
+┌────────┬─────────┬──────────┬─────────────────┐
+│ Packet │ Protocol│ Username │ Additional Info │
+├────────┼─────────┼──────────┼─────────────────┤
+│ 101    │ FTP     │ admin    │ ...             │
+│ 205    │ FTP     │ admin    │ ...             │
+│ 309    │ HTTP    │ alice    │ ...             │
+└────────┴─────────┴──────────┴─────────────────┘
+```
+
+The exact columns can depend on the protocol and Wireshark version.
+
+---
+
+# 8. Why Is the Packet Number Important?
+
+Suppose Wireshark shows:
+
+```text
+Packet 309
+FTP
+admin
+```
+
+You can click the packet number.
+
+Wireshark jumps directly to that packet.
+
+So:
+
+```text
+Credentials list
+       ↓
+Packet 309
+       ↓
+Original packet
+       ↓
+Inspect details
+```
+
+This is extremely useful during investigations.
+
+---
+
+# 9. Why Is the Username Clickable?
+
+The username entry can also be clicked.
+
+It can take you to the packet containing the username information.
+
+For example:
+
+```text
+Credentials window
+
+Username: admin
+      ↓
+     click
+      ↓
+USER admin packet
+```
+
+The material also notes that the additional information can identify the packet containing the username.
+
+So you can move between:
+
+```text
+Password packet
+      ↕
+Username packet
+```
+
+This makes manual verification much easier.
+
+---
+
+# 10. Example: Finding a Brute-Force Pattern
+
+Imagine the Credentials window shows:
+
+```text
+Packet 100   FTP   admin
+Packet 105   FTP   admin
+Packet 110   FTP   admin
+Packet 115   FTP   admin
+Packet 120   FTP   admin
+```
+
+You notice:
+
+```text
+Same username
+      +
+Many credential attempts
+```
+
+Now investigate the packets.
+
+You may discover:
+
+```text
+admin + password1 → 530
+admin + password2 → 530
+admin + password3 → 530
+admin + password4 → 530
+admin + password5 → 230
+```
+
+That gives you:
+
+```text
+5 attempts
+   ↓
+4 failures
+   ↓
+1 success
+```
+
+Potentially suspicious.
+
+But remember the lesson from the previous FTP section:
+
+> **Multiple failed credentials do not automatically prove brute force.**
+
+It could also be:
+
+```text
+User forgot password
+       OR
+Application retrying
+       OR
+Brute-force attack
+```
+
+You need context.
+
+---
+
+# 11. Credential Hunting ≠ Attack Detection
+
+This distinction is **very important**.
+
+The Credentials feature answers:
+
+> **"Where are cleartext credentials?"**
+
+It does **not automatically answer**:
+
+> **"Is this an attack?"**
+
+Think:
+
+```text
+Credentials feature
+       ↓
+Find credentials
+       ↓
+Investigate context
+       ↓
+Look at timestamps
+       ↓
+Look at source IP
+       ↓
+Look at destination
+       ↓
+Look at response codes
+       ↓
+Look for repeated attempts
+       ↓
+Determine whether behavior is suspicious
+```
+
+---
+
+# 12. Example: Normal User
+
+Suppose:
+
+```text
+10:00
+alice → password wrong → FAIL
+
+10:01
+alice → correct password → SUCCESS
+```
+
+That's probably not enough evidence for brute force.
+
+---
+
+# 13. Example: Potential Brute Force
+
+Now:
+
+```text
+10:00:01
+admin → password1 → FAIL
+
+10:00:02
+admin → password2 → FAIL
+
+10:00:03
+admin → password3 → FAIL
+
+10:00:04
+admin → password4 → FAIL
+
+10:00:05
+admin → password5 → FAIL
+
+10:00:06
+admin → password6 → SUCCESS
+```
+
+This pattern is much more suspicious.
+
+The important evidence is:
+
+```text
+High frequency
+      +
+Same account
+      +
+Many different passwords
+      +
+Repeated failures
+      +
+Potential success
+```
+
+---
+
+# 14. Why the Feature Saves Time
+
+Without the Credentials feature:
+
+```text
+1000 packets
+    ↓
+Manually inspect
+    ↓
+Find USER
+    ↓
+Find PASS
+    ↓
+Match them
+    ↓
+Repeat
+```
+
+With the feature:
+
+```text
+1000 packets
+    ↓
+Tools → Credentials
+    ↓
+Credential list
+    ↓
+Spot patterns quickly
+    ↓
+Jump to interesting packets
+```
+
+So the feature improves:
+
+> **Investigation speed and visibility.**
+
+---
+
+# 15. But Don't Completely Trust It
+
+This is probably the **most important warning** in this section.
+
+The material explicitly says:
+
+> Do not rely entirely on this feature.
+
+Why?
+
+Because it only works with **specific supported protocols and traffic patterns**.
+
+It cannot magically detect every credential transmitted in every protocol.
+
+Therefore:
+
+```text
+Credentials feature
+       +
+Manual Wireshark analysis
+       ↓
+Better investigation
+```
+
+NOT:
+
+```text
+Credentials feature
+       ↓
+Everything is detected
+       ↓
+Investigation complete ❌
+```
+
+---
+
+# 16. Manual Verification Is Important
+
+Suppose the Credentials window shows:
+
+```text
+FTP | admin
+```
+
+Don't immediately write:
+
+> "Attack detected."
+
+Instead:
+
+### Step 1
+
+Click the packet.
+
+### Step 2
+
+Inspect the actual packet.
+
+### Step 3
+
+Look at the surrounding packets.
+
+### Step 4
+
+Check:
+
+```text
+Source IP
+Destination IP
+Timestamp
+Username
+Authentication result
+Commands
+```
+
+### Step 5
+
+Determine the behavior.
+
+---
+
+# 17. Connect It With Your FTP Knowledge
+
+You already learned these filters:
+
+```text
+ftp
+```
+
+```text
+ftp.request.command == "USER"
+```
+
+```text
+ftp.request.command == "PASS"
+```
+
+```text
+ftp.response.code == 230
+```
+
+```text
+ftp.response.code == 530
+```
+
+Now the Credentials feature provides another way to approach the same problem.
+
+### Manual method
+
+```text
+ftp
+ ↓
+USER
+ ↓
+PASS
+ ↓
+230 / 530
+ ↓
+Correlate
+```
+
+### Credentials feature
+
+```text
+Tools
+ ↓
+Credentials
+ ↓
+Credential list
+ ↓
+Identify interesting entries
+ ↓
+Jump to packets
+ ↓
+Manual investigation
+```
+
+The second method is faster for **initial hunting**.
+
+---
+
+# 18. Connect It With HTTP
+
+You also learned HTTP can contain cleartext form data.
+
+For example:
+
+```text
+POST /login
+
+username=admin
+password=test123
+```
+
+A credentials-hunting workflow might be:
+
+```text
+HTTP
+ ↓
+Credentials feature
+ ↓
+Potential credential entry
+ ↓
+Click packet
+ ↓
+Inspect POST request
+ ↓
+Inspect surrounding traffic
+```
+
+So your previous HTTP knowledge becomes useful here too.
+
+---
+
+# 19. The Big SOC Analyst Workflow
+
+This entire section teaches a very important SOC concept:
+
+```text
+                 PCAP
+                   |
+                   ↓
+          Automated extraction
+                   |
+                   ↓
+        Credentials feature
+                   |
+                   ↓
+        Interesting credentials
+                   |
+                   ↓
+          Manual verification
+                   |
+        ┌──────────┼──────────┐
+        ↓          ↓          ↓
+      Source      Time      Protocol
+        ↓          ↓          ↓
+        └──────────┼──────────┘
+                   ↓
+              Correlation
+                   ↓
+              Find pattern
+                   ↓
+          Suspicious or normal?
+```
+
+This is exactly how you should think about Wireshark.
+
+---------------------------
+
+# Bonus: Actionable Results! — Learn It + GitHub Revision Notes
+
+This section answers an important question:
+
+> **After I investigate a suspicious packet capture, what do I actually do with the result?**
+
+So far, you've learned how to:
+
+```text
+Capture traffic
+      ↓
+Analyze packets
+      ↓
+Find anomalies
+      ↓
+Identify suspicious IPs / ports / MACs
+      ↓
+Create investigation notes
+```
+
+Now we move to the next step:
+
+```text
+Investigation
+      ↓
+Action
+```
+
+That's what **Actionable Results** means.
+
+---
+
+# 1. What Does "Actionable Result" Mean?
+
+An **actionable result** is an investigation finding that can be turned into a security action.
+
+For example, imagine you discover:
+
+```text
+Internal Host
+192.168.1.50
+      |
+      | suspicious traffic
+      ↓
+203.0.113.50
+```
+
+After investigating, you determine that `203.0.113.50` is a malicious destination.
+
+Your result isn't simply:
+
+> "I found suspicious traffic."
+
+A more actionable result is:
+
+> "Block traffic from/to `203.0.113.50` at the firewall."
+
+So:
+
+```text
+Finding
+  ↓
+Suspicious IP
+  ↓
+Firewall rule
+  ↓
+Block/allow traffic
+```
+
+---
+
+# 2. Where Does Wireshark Help?
+
+Wireshark is primarily a **packet analyzer**, not a firewall.
+
+But it can help you **generate firewall ACL rules based on information found in the capture**.
+
+The feature is:
+
+```text
+Tools
+  ↓
+Firewall ACL Rules
+```
+
+Conceptually:
+
+```text
+Wireshark
+   |
+   | Investigate PCAP
+   ↓
+Identify suspicious traffic
+   ↓
+Tools → Firewall ACL Rules
+   ↓
+Generate firewall rule
+   ↓
+Implement on firewall
+```
+
+---
+
+# 3. Important: Wireshark Doesn't Become the Firewall
+
+This is a very important distinction.
+
+Wireshark:
+
+```text
+Analyze traffic
+       +
+Generate rule
+```
+
+It does **not** mean:
+
+```text
+Wireshark
+   ↓
+Automatically blocks attacker ❌
+```
+
+Instead:
+
+```text
+Wireshark
+   ↓
+Generates ACL rule
+   ↓
+Security administrator/firewall
+   ↓
+Implements rule
+```
+
+So the generated rule is intended for an **external firewall interface**.
+
+---
+
+# 4. What Is an ACL?
+
+**ACL = Access Control List**
+
+An ACL is a set of rules that controls network traffic.
+
+For example:
+
+```text
+Rule 1:
+Block 203.0.113.50
+
+Rule 2:
+Allow internal network
+
+Rule 3:
+Block suspicious port
+```
+
+Conceptually:
+
+```text
+Traffic
+   |
+   ↓
+Firewall
+   |
+   ├── Rule 1 → BLOCK
+   ├── Rule 2 → ALLOW
+   └── Rule 3 → BLOCK
+```
+
+The firewall checks traffic against these rules.
+
+---
+
+# 5. Why Is This Useful to a Security Analyst?
+
+Imagine you've analyzed a PCAP and found:
+
+```text
+Attacker IP:
+203.0.113.50
+
+Destination port:
+445
+
+MAC:
+AA:BB:CC:DD:EE:FF
+```
+
+You may want to create a rule such as:
+
+```text
+Block traffic
+from/to
+203.0.113.50
+```
+
+Instead of manually writing the firewall syntax, Wireshark can generate a rule in a format supported by different firewall platforms.
+
+This saves time and reduces syntax mistakes.
+
+---
+
+# 6. What Information Can Be Used?
+
+The material says Wireshark can generate rules based on:
+
+### IP address
+
+Example:
+
+```text
+203.0.113.50
+```
+
+### Port
+
+Example:
+
+```text
+TCP 445
+```
+
+### MAC address
+
+Example:
+
+```text
+AA:BB:CC:DD:EE:FF
+```
+
+So think:
+
+```text
+Firewall ACL
+      |
+      ├── IP
+      ├── Port
+      └── MAC
+```
+
+---
+
+# 7. Example Investigation
+
+Imagine your PCAP shows:
+
+```text
+192.168.1.20
+      |
+      | TCP/443
+      ↓
+198.51.100.25
+```
+
+After investigation, you determine that the destination is suspicious.
+
+Your investigation notes might say:
+
+```text
+Source: 192.168.1.20
+Destination: 198.51.100.25
+Protocol: TCP
+Port: 443
+Finding: Suspicious communication
+```
+
+Now you need an action.
+
+Potential action:
+
+```text
+Block 198.51.100.25
+```
+
+Wireshark can help generate a corresponding firewall rule.
+
+---
+
+# 8. The Complete Investigation-to-Action Workflow
+
+This is the most important diagram to remember:
+
+```text
+                 PCAP
+                   |
+                   ↓
+             Analyze traffic
+                   |
+                   ↓
+             Detect anomaly
+                   |
+                   ↓
+          Identify indicator
+                   |
+        ┌──────────┼──────────┐
+        ↓          ↓          ↓
+       IP         Port       MAC
+        |          |          |
+        └──────────┼──────────┘
+                   ↓
+       Tools → Firewall ACL Rules
+                   |
+                   ↓
+          Generate firewall rule
+                   |
+                   ↓
+       External firewall interface
+                   |
+                   ↓
+             Apply the rule
+                   |
+                   ↓
+              Block/Allow
+```
+
+---
+
+# 9. Supported Firewall Formats
+
+According to the material, Wireshark can generate rules for several firewall platforms.
+
+## 1. Netfilter / iptables
+
+Commonly associated with Linux firewalling.
+
+```text
+Netfilter
+   ↓
+iptables
+```
+
+---
+
+## 2. Cisco IOS
+
+Wireshark supports:
+
+```text
+Cisco IOS
+├── Standard ACL
+└── Extended ACL
+```
+
+### Standard ACL
+
+Generally focuses primarily on source IP-based filtering.
+
+### Extended ACL
+
+Can provide more detailed filtering, such as:
+
+```text
+Source
+Destination
+Protocol
+Port
+```
+
+---
+
+## 3. IP Filter
+
+Wireshark supports:
+
+```text
+IP Filter
+(ipfilter)
+```
+
+This is another firewall/filtering framework.
+
+---
+
+## 4. IPFirewall
+
+Also called:
+
+```text
+ipfw
+```
+
+Wireshark can generate rules in this format.
+
+---
+
+## 5. Packet Filter
+
+Commonly referred to as:
+
+```text
+pf
+```
+
+Another firewall packet-filtering system.
+
+---
+
+## 6. Windows Firewall
+
+Wireshark supports Windows Firewall rule formats through:
+
+```text
+netsh
+```
+
+The material mentions:
+
+```text
+Windows Firewall
+├── netsh new format
+└── netsh old format
+```
+
+---
+
+# 10. Easy Way to Memorize the List
+
+Remember:
+
+```text
+Linux
+ → iptables
+
+Cisco
+ → IOS ACL
+
+IP Filter
+ → ipfilter
+
+IP Firewall
+ → ipfw
+
+Packet Filter
+ → pf
+
+Windows
+ → netsh
+```
+
+Or simply:
+
+> **iptables, Cisco IOS, ipfilter, ipfw, pf, netsh**
+
+---
+
+# 11. Why Different Formats?
+
+Different firewall platforms use different syntax.
+
+For example, conceptually:
+
+```text
+Firewall A
+→ Rule syntax A
+
+Firewall B
+→ Rule syntax B
+
+Firewall C
+→ Rule syntax C
+```
+
+You don't want to manually translate:
+
+```text
+"Block this IP"
+```
+
+into every firewall's syntax.
+
+Wireshark can generate the appropriate format.
+
+Conceptually:
+
+```text
+Finding:
+Block X.X.X.X
+       |
+       ↓
+Wireshark
+       |
+ ┌─────┼────────┐
+ ↓     ↓        ↓
+Linux Cisco   Windows
+ ↓     ↓        ↓
+Rule A Rule B  Rule C
+```
+
+---
+
+# 12. Why This Matters During Incident Response
+
+Imagine you're investigating an active incident.
+
+You identify a malicious destination:
+
+```text
+Malicious IP
+      ↓
+203.0.113.50
+```
+
+The organization needs to stop communication quickly.
+
+The workflow can be:
+
+```text
+Detect
+  ↓
+Validate
+  ↓
+Identify malicious IP
+  ↓
+Generate ACL rule
+  ↓
+Firewall team implements
+  ↓
+Traffic blocked
+```
+
+This is much more useful than simply recording:
+
+> "IP is suspicious."
+
+That's why the result is called **actionable**.
+
+---
+
+# 13. But Be Careful Before Blocking
+
+This is an important security-analyst habit.
+
+**Do not automatically block something just because one packet looks suspicious.**
+
+First:
+
+```text
+Suspicious packet
+      ↓
+Investigate
+      ↓
+Check context
+      ↓
+Correlate other traffic
+      ↓
+Confirm finding
+      ↓
+Determine impact
+      ↓
+Take action
+```
+
+Why?
+
+Because an incorrect firewall rule could block:
+
+* Legitimate users
+* Business services
+* Critical infrastructure
+* Required communication
+
+So:
+
+> **Detection → Validation → Action**
+
+not:
+
+> **Detection → Immediate blocking**
+
+---
+
+# 14. Example: False Positive
+
+Suppose you see:
+
+```text
+192.168.1.50
+     ↓
+203.0.113.10
+```
+
+and initially think:
+
+> "This looks suspicious."
+
+Before blocking it, investigate:
+
+```text
+Who owns the IP?
+What service is running?
+Is this normal for the organization?
+What protocol?
+What port?
+How frequently?
+What data?
+```
+
+You might discover it's actually:
+
+```text
+Legitimate cloud service
+```
+
+Therefore:
+
+```text
+Suspicious ≠ Confirmed malicious
+```
+
+This is a very important SOC principle.
+
+---
+
+# 15. Wireshark's Role in the Bigger Security Architecture
+
+Think of your security tools like this:
+
+```text
+                 Network
+                    |
+                    ↓
+             Packet Capture
+                    |
+                    ↓
+                Wireshark
+                    |
+           ┌────────┴────────┐
+           ↓                 ↓
+       Analysis          Investigation
+           |                 |
+           ↓                 ↓
+      Suspicious IP      Suspicious port
+           |                 |
+           └────────┬────────┘
+                    ↓
+             Actionable result
+                    |
+                    ↓
+              Firewall / ACL
+                    |
+                    ↓
+             Traffic control
+```
+
+Wireshark sits mainly on the **analysis/investigation** side.
+
+The firewall sits on the **enforcement** side.
+
+---
+
+# 16. Wireshark Is Not an IDS
+
+This connects directly to your earlier lesson.
+
+You learned:
+
+> **Wireshark is not an IDS.**
+
+That still applies.
+
+### IDS
+
+```text
+Traffic
+  ↓
+IDS
+  ↓
+Detect
+  ↓
+Alert
+```
+
+### Wireshark
+
+```text
+PCAP
+  ↓
+Analyst
+  ↓
+Investigate
+  ↓
+Understand traffic
+  ↓
+Generate useful evidence/rules
+```
+
+So Wireshark helps the analyst investigate and prepare actions, but it isn't a replacement for a dedicated IDS/IPS or firewall.
+
+---
+
+# 17. Very Important Security Concept: Evidence → Action
+
+This entire bonus section can be summarized as:
+
+```text
+Evidence
+   ↓
+Analysis
+   ↓
+Finding
+   ↓
+Indicator
+   ↓
+Action
+```
+
+For example:
+
+```text
+PCAP
+ ↓
+Suspicious connection
+ ↓
+Malicious IP identified
+ ↓
+IP = 203.0.113.50
+ ↓
+Generate firewall ACL
+ ↓
+Firewall blocks traffic
+```
+
+That's an **actionable result**.
+
+---
+
+# 18. Quick Revision Table
+
+| Concept           | Meaning                                    |
+| ----------------- | ------------------------------------------ |
+| Actionable result | Finding that can lead to a security action |
+| ACL               | Access Control List                        |
+| Wireshark menu    | `Tools → Firewall ACL Rules`               |
+| IP-based rule     | Filter traffic using IP address            |
+| Port-based rule   | Filter traffic using network port          |
+| MAC-based rule    | Filter traffic using MAC address           |
+| Wireshark role    | Analyze traffic and generate rules         |
+| Firewall role     | Enforce the rule                           |
+| Important caution | Validate before blocking                   |
+| IDS?              | No, Wireshark is not an IDS                |
+
+### Supported formats
+
+| Firewall/platform | Format                |
+| ----------------- | --------------------- |
+| Linux             | Netfilter / iptables  |
+| Cisco             | IOS Standard/Extended |
+| IP Filter         | ipfilter              |
+| IP Firewall       | ipfw                  |
+| Packet Filter     | pf                    |
+| Windows           | netsh                 |
+
+---
+
+# 19. One-Minute Revision
+
+```text
+ACTIONABLE RESULTS
+
+Investigate PCAP
+      ↓
+Find anomaly
+      ↓
+Identify source/destination
+      ↓
+Identify IP / Port / MAC
+      ↓
+Tools → Firewall ACL Rules
+      ↓
+Generate firewall rule
+      ↓
+Implement on external firewall
+      ↓
+Block / Allow traffic
+```
+
+### Remember:
+
+```text
+Wireshark = Analysis
+Firewall  = Enforcement
+```
+
+And:
+
+> **Never treat a suspicious packet as automatically malicious. Validate the finding before creating a blocking rule.**
+
+---
+
+# 20. Final Mental Model
+
+You have now reached the end of this Wireshark investigation workflow:
+
+```text
+                 WIRESHARK INVESTIGATION
+                         |
+                         ↓
+                     PCAP FILE
+                         |
+                         ↓
+                  Protocol Analysis
+                         |
+        ┌────────────────┼────────────────┐
+        ↓                ↓                ↓
+       FTP              HTTP             HTTPS
+        ↓                ↓                ↓
+   Credentials       Cleartext         TLS
+   Commands           Requests        Decryption
+        |                |                |
+        └────────────────┼────────────────┘
+                         ↓
+                  Detect anomalies
+                         ↓
+                  Extract evidence
+                         ↓
+                Correlate information
+                         ↓
+                 Identify indicators
+                         ↓
+                  Actionable result
+                         ↓
+             Firewall ACL generation
+                         ↓
+              External firewall
+                         ↓
+                  Enforce action
+```
+
+----------------------
